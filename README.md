@@ -11,7 +11,7 @@ This daemon has two functions, to control touchpad settings and to perform accid
 mitigation. 
 
 Accidental Contact Mitigation
-=============================
+-----------------------------
 Accidental contact mitigation is performed by listening for key events from all keyboards connected
 to the system and suppressing pointing motion for a certain timeout in order to prevent the cursor
 from moving when palms bursh against the touchpad while typing. In addition to listening for key events, the daemon also sets the threshold in the driver will suppress large contacts which are most
@@ -21,7 +21,7 @@ aggressive.
 
 
 Settings
-========
+--------
 The daemon's settings are stored in a file located in /data/system/syntouchpad. The format of the 
 file is very simple, with one entry per line. The first line is the accidental contact mitigation
 setting with a value ranging from 0 - 7 and the second line controls the physical click of the
