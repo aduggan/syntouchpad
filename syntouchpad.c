@@ -33,6 +33,7 @@
 #include <linux/filter.h>
 #include <sys/inotify.h>
 
+
 /* Only store the first 32 keyboard and touchpad devices! */
 #define SYN_MAX_KEYBOARDS	32
 #define SYN_MAX_TOUCHPADS	32
@@ -42,6 +43,7 @@
 
 int palm_check_keypress_timeouts[] = { 0, 200, 400, 650, 750, 850, 1000, 1000 };
 int palm_check_highw[] = { 15, 14, 13, 12, 10, 9, 8, 7 };
+
 
 struct touchpad_data
 {
@@ -119,7 +121,7 @@ void find_keyboards(unsigned int * keyboards, int * index)
 	closedir(event_dir);
 }
 
-int read_touchpad_data_file(int * palm_check_setting, int * enable_click)
+int read_touchpad_data_file(int * palm_check_setting, int * enable_click, int * enable_touchpad)
 {
 	int len;
 	int fd;
@@ -128,6 +130,7 @@ int read_touchpad_data_file(int * palm_check_setting, int * enable_click)
 	/* set defaults in case the open or read fails */
 	*enable_click = 1;
 	*palm_check_setting = 3;
+	*enable_touchpad = 1;
 
 	fd = open(SYN_TOUCHPAD_MANAGER_FILE, O_RDONLY);
 	if (fd < 0) {
@@ -142,7 +145,7 @@ int read_touchpad_data_file(int * palm_check_setting, int * enable_click)
 		return 1;
 	}
 
-	sscanf(file_data, "%d\n%d", palm_check_setting, enable_click);
+	sscanf(file_data, "%d\n%d\n%d", palm_check_setting, enable_click, enable_touchpad);
 
 	close(fd);
 
@@ -190,6 +193,30 @@ void update_enable_click_setting(struct touchpad_data * tpd, int enable_click)
 #endif
 }
 
+void update_enable_touchpad_setting(struct touchpad_data * tpd, int enable_touchpad)
+{
+	int rc;
+
+	if (enable_touchpad) {
+		rc = write(tpd->suppress_fd, &cmd_suppress_off, 1);
+		if (rc < 0) {
+			fprintf(stderr, "update_enable_touchpad_setting: enable write failed %s\n",
+				strerror(errno));
+		}
+	} else {
+		rc = write(tpd->suppress_fd, &cmd_suppress_on, 1);
+		if (rc < 0) {
+			fprintf(stderr, "update_enable_touchpad_setting: disable write failed %s\n",
+				strerror(errno));
+		}
+	}
+
+#ifdef DEBUG
+	fprintf(stdout, "update_enable_touchpad_setting: enable touchpad = %d\n", enable_touchpad);
+#endif
+}
+
+
 int open_device_control_file(int * fd, const char * pathname)
 {
 	struct timespec ts;
@@ -229,6 +256,7 @@ void find_touchpads(struct touchpad_data * touchpads, int * index)
 	char pathname[PATH_MAX];
 	int palm_check_setting;
 	int enable_click;
+	int enable_touchpad;
 	const char * fn12_str = "fn12";
 	const char * fn11_str = "fn11";
 	const char * function_name = fn11_str;
@@ -251,7 +279,7 @@ void find_touchpads(struct touchpad_data * touchpads, int * index)
 	if (!devices_dir)
 		return;
 
-	read_touchpad_data_file(&palm_check_setting, &enable_click);
+	read_touchpad_data_file(&palm_check_setting, &enable_click, &enable_touchpad);
 
 	while ((devices_dir_entry = readdir(devices_dir)) != NULL) {
 		if (strstr(devices_dir_entry->d_name, "sensor")) {
@@ -299,6 +327,8 @@ void find_touchpads(struct touchpad_data * touchpads, int * index)
 								 enable_click);
 				update_palm_check_setting(&touchpads[*index],
 								palm_check_setting);
+				update_enable_touchpad_setting(&touchpads[*index],
+								 enable_touchpad);
 				if (touchpads[*index].suppress_fd >= 0)
 					++*index;
 			}
@@ -431,6 +461,7 @@ int main(int argc, char **argv)
 				const int buff_len = sizeof(struct inotify_event) + NAME_MAX + 1;
 				char buff[buff_len];
 				int enable_click;
+				int enable_touchpad;
 				int palm_check_setting;
 
 				len = read(touchpad_notify_fd, buff, buff_len);
@@ -444,7 +475,7 @@ int main(int argc, char **argv)
 				if (strncmp(event->name, "syntouchpad", event->len))
 					continue;
 
-				if (read_touchpad_data_file(&palm_check_setting, &enable_click) < 0)
+				if (read_touchpad_data_file(&palm_check_setting, &enable_click, &enable_touchpad) < 0)
 					continue;
 
 				for (i = 0; i < touchpads_index; ++i) {
@@ -452,6 +483,8 @@ int main(int argc, char **argv)
 									 enable_click);
 					update_palm_check_setting(&touchpads[i],
 								palm_check_setting);
+					update_enable_touchpad_setting(&touchpads[i],
+								enable_touchpad);
 				}
 			}
 
@@ -488,8 +521,15 @@ int main(int argc, char **argv)
 				if (diff_time(&touchpads[i].suppress_time)
 					> touchpads[i].timeout)
 				{
-					if (write(touchpads[i].suppress_fd, &cmd_suppress_off, 1)) {
-						touchpads[i].suppressed = 0;
+					int enable_click;
+					int enable_touchpad;
+					int palm_check_setting;
+					read_touchpad_data_file(&palm_check_setting, &enable_click, &enable_touchpad);
+					if(enable_touchpad)
+					{
+						if (write(touchpads[i].suppress_fd, &cmd_suppress_off, 1)) {
+							touchpads[i].suppressed = 0;
+						}
 					}
 				}
 				else
