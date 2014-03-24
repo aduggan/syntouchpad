@@ -41,7 +41,7 @@
 #define SYN_TOUCHPAD_MANAGER_FILE SYN_TOUCHPAD_MANAGER_DIR "/syntouchpad"
 
 int palm_check_keypress_timeouts[] = { 0, 200, 400, 650, 750, 850, 1000, 1000 };
-int palm_check_highw[] = { 15, 15, 15, 15, 15, 14, 14, 7 };
+int palm_check_highw[] = { 15, 14, 13, 12, 10, 9, 8, 7 };
 
 struct touchpad_data
 {
