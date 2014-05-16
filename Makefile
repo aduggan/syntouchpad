@@ -5,6 +5,9 @@ CFLAGS = -Wall
 SYNTOUCHPADSRC = syntouchpad.c
 SYNTOUCHPADOBJ = $(SYNTOUCHPADSRC:.c=.o)
 
+NDK_PROJECT_PATH=$(PWD)
+export NDK_PROJECT_PATH
+
 all: syntouchpad
 
 syntouchpad: $(SYNTOUCHPADOBJ)
