@@ -41,6 +41,8 @@
 #define SYN_TOUCHPAD_MANAGER_DIR "/data/system"
 #define SYN_TOUCHPAD_MANAGER_FILE SYN_TOUCHPAD_MANAGER_DIR "/syntouchpad"
 
+ #define SYNAPTICS_VENDOR	0x06CB
+
 int palm_check_keypress_timeouts[] = { 0, 200, 400, 650, 750, 850, 1000, 1000 };
 int palm_check_highw[] = { 15, 14, 13, 12, 10, 9, 8, 7 };
 
@@ -121,7 +123,7 @@ void find_keyboards(unsigned int * keyboards, int * index)
 	closedir(event_dir);
 }
 
-int read_touchpad_data_file(int * palm_check_setting, int * enable_click, int * enable_touchpad)
+int read_touchpad_data_file(int * palm_check_setting, int * enable_click, int * enable_touchpad, int * disable_for_ext_mouse)
 {
 	int len;
 	int fd;
@@ -131,6 +133,7 @@ int read_touchpad_data_file(int * palm_check_setting, int * enable_click, int * 
 	*enable_click = 1;
 	*palm_check_setting = 3;
 	*enable_touchpad = 1;
+	*disable_for_ext_mouse = 0;
 
 	fd = open(SYN_TOUCHPAD_MANAGER_FILE, O_RDONLY);
 	if (fd < 0) {
@@ -145,7 +148,7 @@ int read_touchpad_data_file(int * palm_check_setting, int * enable_click, int * 
 		return 1;
 	}
 
-	sscanf(file_data, "%d\n%d\n%d", palm_check_setting, enable_click, enable_touchpad);
+	sscanf(file_data, "%d\n%d\n%d\n%d", palm_check_setting, enable_click, enable_touchpad, disable_for_ext_mouse);
 
 	close(fd);
 
@@ -247,6 +250,37 @@ int open_device_control_file(int * fd, const char * pathname)
 	return rc;
 }
 
+int find_external_mice()
+{
+	struct dirent * input_dir_entry;
+	DIR * input_dir;
+
+	input_dir = opendir("/sys/class/input");
+	if (!input_dir)
+		return 0;
+
+	while ((input_dir_entry = readdir(input_dir)) != NULL) {
+		if (strstr(input_dir_entry->d_name, "mouse")) {
+			char buf[PATH_MAX];
+			char devPath[PATH_MAX];
+			int bus;
+			int vendor;
+			int product;
+			int id;
+
+			snprintf(devPath, PATH_MAX, "/sys/class/input/%s/device/device", input_dir_entry->d_name);
+
+			readlink(devPath, buf, PATH_MAX);
+			sscanf(buf, "../../../%x:%x:%x:%x", &bus, &vendor, &product, &id);
+
+			if (vendor != SYNAPTICS_VENDOR)
+				return 1;
+		}
+	}
+
+	return 0;
+}
+
 void find_touchpads(struct touchpad_data * touchpads, int * index)
 {
 	struct dirent * devices_dir_entry;
@@ -257,6 +291,7 @@ void find_touchpads(struct touchpad_data * touchpads, int * index)
 	int palm_check_setting;
 	int enable_click;
 	int enable_touchpad;
+	int disable_for_ext_mouse;
 	const char * fn12_str = "fn12";
 	const char * fn11_str = "fn11";
 	const char * function_name = fn11_str;
@@ -279,7 +314,10 @@ void find_touchpads(struct touchpad_data * touchpads, int * index)
 	if (!devices_dir)
 		return;
 
-	read_touchpad_data_file(&palm_check_setting, &enable_click, &enable_touchpad);
+	read_touchpad_data_file(&palm_check_setting, &enable_click, &enable_touchpad, &disable_for_ext_mouse);
+
+	if (find_external_mice() && disable_for_ext_mouse)
+		enable_touchpad = 0;
 
 	while ((devices_dir_entry = readdir(devices_dir)) != NULL) {
 		if (strstr(devices_dir_entry->d_name, "sensor")) {
@@ -463,6 +501,7 @@ int main(int argc, char **argv)
 				int enable_click;
 				int enable_touchpad;
 				int palm_check_setting;
+				int disable_for_ext_mouse;
 
 				len = read(touchpad_notify_fd, buff, buff_len);
 				if (len < 0) {
@@ -475,7 +514,7 @@ int main(int argc, char **argv)
 				if (strncmp(event->name, "syntouchpad", event->len))
 					continue;
 
-				if (read_touchpad_data_file(&palm_check_setting, &enable_click, &enable_touchpad) < 0)
+				if (read_touchpad_data_file(&palm_check_setting, &enable_click, &enable_touchpad, &disable_for_ext_mouse) < 0)
 					continue;
 
 				for (i = 0; i < touchpads_index; ++i) {
@@ -492,7 +531,7 @@ int main(int argc, char **argv)
 				if (FD_ISSET(keyboards[i], &fds)) {
 					struct input_event event;
 					data_read = read(keyboards[i], &event, sizeof(event));
-					if (event.type == EV_KEY) {
+					if (data_read > 0 && event.type == EV_KEY) {
 						if (event.value)
 							should_suppress = 1;
 					}
@@ -524,7 +563,8 @@ int main(int argc, char **argv)
 					int enable_click;
 					int enable_touchpad;
 					int palm_check_setting;
-					read_touchpad_data_file(&palm_check_setting, &enable_click, &enable_touchpad);
+					int disable_for_ext_mouse;
+					read_touchpad_data_file(&palm_check_setting, &enable_click, &enable_touchpad, &disable_for_ext_mouse);
 					if(enable_touchpad)
 					{
 						if (write(touchpads[i].suppress_fd, &cmd_suppress_off, 1)) {
