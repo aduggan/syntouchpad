@@ -41,7 +41,7 @@
 #define SYN_TOUCHPAD_MANAGER_DIR "/data/system"
 #define SYN_TOUCHPAD_MANAGER_FILE SYN_TOUCHPAD_MANAGER_DIR "/syntouchpad"
 
- #define SYNAPTICS_VENDOR	0x06CB
+#define SYNAPTICS_VENDOR	0x06CB
 
 int palm_check_keypress_timeouts[] = { 0, 200, 400, 650, 750, 850, 1000, 1000 };
 int palm_check_highw[] = { 15, 14, 13, 12, 10, 9, 8, 7 };
