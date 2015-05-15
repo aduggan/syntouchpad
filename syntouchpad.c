@@ -33,7 +33,6 @@
 #include <linux/filter.h>
 #include <sys/inotify.h>
 
-
 /* Only store the first 32 keyboard and touchpad devices! */
 #define SYN_MAX_KEYBOARDS	32
 #define SYN_MAX_TOUCHPADS	32
@@ -149,6 +148,11 @@ int read_touchpad_data_file(int * palm_check_setting, int * enable_click, int * 
 	}
 
 	sscanf(file_data, "%d\n%d\n%d\n%d", palm_check_setting, enable_click, enable_touchpad, disable_for_ext_mouse);
+
+	if (find_external_mice() && disable_for_ext_mouse)
+	{
+		*enable_touchpad = 0;
+	}
 
 	close(fd);
 
@@ -327,9 +331,6 @@ void find_touchpads(struct touchpad_data * touchpads, int * index)
 		return;
 
 	read_touchpad_data_file(&palm_check_setting, &enable_click, &enable_touchpad, &disable_for_ext_mouse);
-
-	if (find_external_mice() && disable_for_ext_mouse)
-		enable_touchpad = 0;
 
 	while ((devices_dir_entry = readdir(devices_dir)) != NULL) {
 		if (strstr(devices_dir_entry->d_name, "sensor")) {
