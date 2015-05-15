@@ -261,19 +261,28 @@ int find_external_mice()
 
 	while ((input_dir_entry = readdir(input_dir)) != NULL) {
 		if (strstr(input_dir_entry->d_name, "mouse")) {
-			char buf[PATH_MAX];
-			char devPath[PATH_MAX];
+			char buf[4096];
+			char devNamePath[PATH_MAX];
 			int bus;
 			int vendor;
 			int product;
 			int id;
+			int fd;
+			size_t count;
 
-			snprintf(devPath, PATH_MAX, "/sys/class/input/%s/device/device", input_dir_entry->d_name);
+			snprintf(devNamePath, PATH_MAX, "/sys/class/input/%s/device/name", input_dir_entry->d_name);
 
-			readlink(devPath, buf, PATH_MAX);
-			sscanf(buf, "../../../%x:%x:%x:%x", &bus, &vendor, &product, &id);
+			fd = open(devNamePath, O_RDONLY);
+			if (fd < 0)
+				continue;
 
-			if (vendor != SYNAPTICS_VENDOR)
+			count = read(fd, buf, 4096);
+			if (count < 0)
+				continue;
+
+			buf[count] = 0;
+
+			if (!strstr(buf, "Synaptics"))
 				return 1;
 		}
 	}
