@@ -1,0 +1,15 @@
+type syntouchpad, domain;
+type syntouchpad_exec, exec_type, file_type;
+
+init_daemon_domain(syntouchpad)
+
+# For touchpad data file
+allow syntouchpad system_data_file:dir rw_dir_perms;
+allow syntouchpad system_data_file:file create_file_perms;
+
+# allow access to /dev/input/event* to read events from the keyboard
+allow syntouchpad input_device:dir r_dir_perms;
+allow syntouchpad input_device:chr_file r_file_perms;
+
+allow syntouchpad sysfs:file rw_file_perms;
+allow syntouchpad self:capability { dac_read_search dac_override };
