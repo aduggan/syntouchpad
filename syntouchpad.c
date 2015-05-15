@@ -277,10 +277,13 @@ int find_external_mice()
 				continue;
 
 			count = read(fd, buf, 4096);
-			if (count < 0)
+			if (count < 0) {
+				close(fd);
 				continue;
+			}
 
 			buf[count] = 0;
+			close(fd);
 
 			if (!strstr(buf, "Synaptics"))
 				return 1;
