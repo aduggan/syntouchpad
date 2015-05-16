@@ -149,7 +149,7 @@ int read_touchpad_data_file(int * palm_check_setting, int * enable_click, int * 
 
 	sscanf(file_data, "%d\n%d\n%d\n%d", palm_check_setting, enable_click, enable_touchpad, disable_for_ext_mouse);
 
-	if (find_external_mice() && disable_for_ext_mouse)
+	if (find_external_mice() && *disable_for_ext_mouse)
 	{
 		*enable_touchpad = 0;
 	}
