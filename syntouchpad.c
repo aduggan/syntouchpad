@@ -296,20 +296,16 @@ int find_external_mice()
 
 void find_touchpads(struct touchpad_data * touchpads, int * index)
 {
-	struct dirent * devices_dir_entry;
-	struct dirent * sensor_dir_entry;
-	DIR * devices_dir;
-	DIR * sensor_dir;
+	struct dirent * input_dir_entry;
+	struct dirent * device_dir_entry;
+	DIR * input_dir;
+	DIR * device_dir;
 	char pathname[PATH_MAX];
-	int palm_check_setting;
 	int enable_click;
 	int enable_touchpad;
+	int palm_check_setting;
 	int disable_for_ext_mouse;
-	const char * fn12_str = "fn12";
-	const char * fn11_str = "fn11";
-	const char * function_name = fn11_str;
-	int fn30 = 0;
-	int fn12 = 0;
+	int i;
 
 	if (index > 0) {
 		int i;
@@ -317,73 +313,69 @@ void find_touchpads(struct touchpad_data * touchpads, int * index)
 			close(touchpads[i].suppress_fd);
 			close(touchpads[i].highw_fd);
 			close(touchpads[i].suppress_click_fd);
-			memset(&touchpads[i], 0, sizeof(struct touchpad_data));
 		}
 		/* clear the old values */
 		*index = 0;
 	}
+	memset(touchpads, 0, sizeof(struct touchpad_data) * SYN_MAX_TOUCHPADS);
 
-	devices_dir = opendir("/sys/devices");
-	if (!devices_dir)
+	input_dir = opendir("/sys/class/input");
+	if (!input_dir)
 		return;
+
+	while ((input_dir_entry = readdir(input_dir)) != NULL) {
+		if (strstr(input_dir_entry->d_name, "mouse")) {
+			snprintf(pathname, PATH_MAX, "/sys/class/input/%s/device/device", input_dir_entry->d_name);
+			device_dir = opendir(pathname);
+			if (!device_dir)
+				continue;
+
+			while ((device_dir_entry = readdir(device_dir)) != NULL) {
+				if (strstr(device_dir_entry->d_name, "fn30")) {
+					snprintf(pathname, PATH_MAX,
+						"/sys/class/input/%s/device/device/%s/suppress",
+						input_dir_entry->d_name,
+						device_dir_entry->d_name);
+					open_device_control_file(
+						&touchpads[*index].suppress_click_fd,
+						pathname);
+				}
+				if (strstr(device_dir_entry->d_name, "fn12") || strstr(device_dir_entry->d_name, "fn11")) {
+					snprintf(pathname, PATH_MAX,
+						"/sys/class/input/%s/device/device/%s/suppress",
+						input_dir_entry->d_name,
+						device_dir_entry->d_name);
+					open_device_control_file(&touchpads[*index].suppress_fd,
+						pathname);
+					snprintf(pathname, PATH_MAX,
+						"/sys/class/input/%s/device/device/%s/suppress_highw",
+						input_dir_entry->d_name,
+						device_dir_entry->d_name);
+					open_device_control_file(&touchpads[*index].highw_fd,
+						pathname);
+				}
+			}
+			closedir(device_dir);
+
+			fprintf(stdout, "suppress fd: %d\n", touchpads[*index].suppress_fd);
+			if (touchpads[*index].suppress_fd > 0)
+					++*index;
+			fprintf(stdout, "index: %d\n", *index);
+		}
+	}
+	closedir(input_dir);
 
 	read_touchpad_data_file(&palm_check_setting, &enable_click, &enable_touchpad, &disable_for_ext_mouse);
 
-	while ((devices_dir_entry = readdir(devices_dir)) != NULL) {
-		if (strstr(devices_dir_entry->d_name, "sensor")) {
-			snprintf(pathname, PATH_MAX, "/sys/devices/%s", devices_dir_entry->d_name);
-			sensor_dir = opendir(pathname);
-			if (!sensor_dir)
-				continue;
-
-			while ((sensor_dir_entry = readdir(sensor_dir)) != NULL) {
-				if (strstr(sensor_dir_entry->d_name, "fn30"))
-					fn30 = 1;
-				if (strstr(sensor_dir_entry->d_name, "fn12"))
-					fn12 = 1;
-			}
-			closedir(sensor_dir);
-
-			if (fn30) {
-				/* found a sensor with F$30 so assume its a clickpad */
-				if (fn12)
-					function_name = fn12_str;
-
-				snprintf(pathname, PATH_MAX, 
-					"/sys/devices/%s/%s.%s/suppress",
-					devices_dir_entry->d_name,
-					devices_dir_entry->d_name,
-					function_name);
-				open_device_control_file(&touchpads[*index].suppress_fd,
-					pathname);
-				snprintf(pathname, PATH_MAX,
-					"/sys/devices/%s/%s.%s/suppress_highw",
-					devices_dir_entry->d_name,
-					devices_dir_entry->d_name,
-					function_name);
-				open_device_control_file(&touchpads[*index].highw_fd,
-					pathname);
-				snprintf(pathname, PATH_MAX,
-					"/sys/devices/%s/%s.fn30/suppress",
-					devices_dir_entry->d_name,
-					devices_dir_entry->d_name);
-				open_device_control_file(
-					&touchpads[*index].suppress_click_fd,
-					pathname);
-
-				update_enable_click_setting(&touchpads[*index],
-								 enable_click);
-				update_palm_check_setting(&touchpads[*index],
-								palm_check_setting);
-				update_enable_touchpad_setting(&touchpads[*index],
-								 enable_touchpad);
-				if (touchpads[*index].suppress_fd >= 0)
-					++*index;
-			}
-		}
+	for (i = 0; i < *index; ++i) {
+		fprintf(stdout, "i: %d\n", i);
+		update_enable_click_setting(&touchpads[i],
+						 enable_click);
+		update_palm_check_setting(&touchpads[i],
+					palm_check_setting);
+		update_enable_touchpad_setting(&touchpads[i],
+					enable_touchpad);
 	}
-	closedir(devices_dir);
-
 }
 
 long long diff_time(struct timespec * start)
@@ -415,6 +407,7 @@ int main(int argc, char **argv)
 	int wd;
 	int len;
 	struct timespec ts;
+
 
 	if (argc > 1 && strstr(argv[1], "--fake-it")) {
 		touchpads[0].suppress_fd = open("/dev/null", O_WRONLY);
@@ -501,7 +494,6 @@ int main(int argc, char **argv)
 
 				find_touchpads(touchpads, &touchpads_index);
 				find_keyboards(keyboards, &keyboards_index);
-				continue;
 			}
 
 			if (FD_ISSET(touchpad_notify_fd, &fds)) {
