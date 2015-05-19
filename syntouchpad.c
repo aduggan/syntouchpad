@@ -45,6 +45,7 @@
 int palm_check_keypress_timeouts[] = { 0, 200, 400, 650, 750, 850, 1000, 1000 };
 int palm_check_highw[] = { 15, 14, 13, 12, 10, 9, 8, 7 };
 
+int find_external_mice();
 
 struct touchpad_data
 {
@@ -267,10 +268,6 @@ int find_external_mice()
 		if (strstr(input_dir_entry->d_name, "mouse")) {
 			char buf[4096];
 			char devNamePath[PATH_MAX];
-			int bus;
-			int vendor;
-			int product;
-			int id;
 			int fd;
 			size_t count;
 
