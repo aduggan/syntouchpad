@@ -464,7 +464,7 @@ int main(int argc, char **argv)
 
 		res = select(max_fd + 1, &fds, NULL, NULL, pselect_timeout);
 		if (res < 0) {
-			if (res == EINTR) {
+			if (errno == EINTR) {
 				continue;
 			} else {
 				perror("select()");
